@@ -1,0 +1,574 @@
+//This example demonstrates the ESP RainMaker with a standard Switch device.
+#include "RMaker.h"
+#include "WiFi.h"
+#include "WiFiProv.h"
+#include <DHT.h> 
+#include <Wire.h>            
+#include <LiquidCrystal_I2C.h>       
+LiquidCrystal_I2C lcd(0x3F, 20, 4);  
+
+
+int screenWidth = 20;  
+int screenHeight = 4;     
+
+#define DEFAULT_POWER_MODE true
+const char *service_name = "PROV_SMART HOME";
+const char *pop = "1234";
+
+// define the Chip Id
+uint32_t espChipId = 5;
+
+// define the Node Name
+char nodeName[] = "MODULO PRINCIPAL";
+
+static uint8_t DHTPIN = 16; // RX2  pin connected with DHT
+
+// GPIO for push button
+static uint8_t gpio_reset = 0;
+// GPIO for switch
+static uint8_t gpio_switch1 = 13;
+static uint8_t gpio_switch2 = 12;
+static uint8_t gpio_switch3 = 14;
+static uint8_t gpio_switch4 = 27;
+static uint8_t gpio_switch5 = 33;
+static uint8_t gpio_switch6 = 32;
+static uint8_t gpio_switch7 = 15;
+static uint8_t gpio_switch8 = 4;
+
+
+// GPIO for virtual device
+static uint8_t gpio_relay1 = 23;
+static uint8_t gpio_relay2 = 25;
+static uint8_t gpio_relay3 = 26;
+static uint8_t gpio_relay4 = 19;
+static uint8_t gpio_relay5 = 18;
+static uint8_t gpio_relay6 = 5;
+static uint8_t gpio_relay7 = 17;
+static uint8_t gpio_relay8 = 3;
+
+/* Variable for reading pin status*/
+bool switch_state_ch1 = true;
+bool switch_state_ch2 = true;
+bool switch_state_ch3 = true;
+bool switch_state_ch4 = true;
+bool switch_state_ch5 = true;
+bool switch_state_ch6 = true;
+bool switch_state_ch7 = true;
+bool switch_state_ch8 = true;
+
+
+float temperature1 = 0;
+float humidity1   = 0;
+
+DHT dht(DHTPIN, DHT11);
+
+// GPIO for link status LED
+static uint8_t gpio_led = 2;
+
+struct LightSwitch {
+    const uint8_t pin;
+    bool pressed;
+};
+
+// Define the light switches for channel 1 a 8
+LightSwitch switch_ch1 = {gpio_switch1, false};
+LightSwitch switch_ch2 = {gpio_switch2, false};
+LightSwitch switch_ch3 = {gpio_switch3, false};
+LightSwitch switch_ch4 = {gpio_switch4, false};
+LightSwitch switch_ch5 = {gpio_switch5, false};
+LightSwitch switch_ch6 = {gpio_switch6, false};
+LightSwitch switch_ch7 = {gpio_switch7, false};
+LightSwitch switch_ch8 = {gpio_switch8, false};
+
+//The framework provides some standard device types like switch, lightbulb, fan, temperature sensor.
+static Switch my_switch1("Switch_ch1", &gpio_relay1);
+static Switch my_switch2("Switch_ch2", &gpio_relay2);
+static Switch my_switch3("Switch_ch3", &gpio_relay3);
+static Switch my_switch4("Switch_ch4", &gpio_relay4);
+static Switch my_switch5("Switch_ch5", &gpio_relay5);
+static Switch my_switch6("Switch_ch6", &gpio_relay6);
+static Switch my_switch7("Switch_ch7", &gpio_relay7);
+static Switch my_switch8("Switch_ch8", &gpio_relay8);
+
+static TemperatureSensor temperature("Temperatura");
+static TemperatureSensor humidity("Umidade");
+
+unsigned long previousMillis = 0;
+unsigned long interval = 60000;
+
+void sysProvEvent(arduino_event_t *sys_event)
+{
+    switch (sys_event->event_id) {      
+        case ARDUINO_EVENT_PROV_START:
+#if CONFIG_IDF_TARGET_ESP32
+        Serial.printf("\nProvisioning Started with name \"%s\" and PoP \"%s\" on BLE\n", service_name, pop);
+        printQR(service_name, pop, "ble");
+#else
+        Serial.printf("\nProvisioning Started with name \"%s\" and PoP \"%s\" on SoftAP\n", service_name, pop);
+        printQR(service_name, pop, "softap");
+#endif        
+        break;
+        case ARDUINO_EVENT_WIFI_STA_CONNECTED:
+        Serial.printf("\nConnected to Wi-Fi!\n");
+        digitalWrite(gpio_led, true);
+        break;
+    }
+}
+
+void write_callback(Device *device, Param *param, const param_val_t val, void *priv_data, write_ctx_t *ctx)
+{
+    const char *device_name = device->getDeviceName();
+    const char *param_name = param->getParamName();
+
+    if(strcmp(device_name, "Switch_ch1") == 0) {
+      
+      Serial.printf("Lightbulb = %s\n", val.val.b? "true" : "false");
+      
+    if(strcmp(param_name, "Power") == 0) {
+          Serial.printf("Received value = %s for %s - %s\n", val.val.b? "true" : "false", device_name, param_name);
+        switch_state_ch1 = val.val.b;
+        (switch_state_ch1 == false) ? digitalWrite(gpio_relay1, HIGH) : digitalWrite(gpio_relay1, LOW);
+        param->updateAndReport(val);
+      }    
+      } 
+    else if(strcmp(device_name, "Switch_ch2") == 0) {
+      
+      Serial.printf("Switch value = %s\n", val.val.b? "true" : "false");
+
+    if(strcmp(param_name, "Power") == 0) {
+        Serial.printf("Received value = %s for %s - %s\n", val.val.b? "true" : "false", device_name, param_name);
+        switch_state_ch2 = val.val.b;
+        (switch_state_ch2 == false) ? digitalWrite(gpio_relay2, HIGH) : digitalWrite(gpio_relay2, LOW);
+        param->updateAndReport(val);
+      }
+      }
+      if(strcmp(device_name, "Switch_ch3") == 0) {
+      
+      Serial.printf("Lightbulb = %s\n", val.val.b? "true" : "false");
+      
+      if(strcmp(param_name, "Power") == 0) {
+          Serial.printf("Received value = %s for %s - %s\n", val.val.b? "true" : "false", device_name, param_name);
+        switch_state_ch3 = val.val.b;
+        (switch_state_ch3 == false) ? digitalWrite(gpio_relay3, HIGH) : digitalWrite(gpio_relay3, LOW);
+        param->updateAndReport(val);
+      }  
+      }
+      else if(strcmp(device_name, "Switch_ch4") == 0) {
+      
+      Serial.printf("Switch value = %s\n", val.val.b? "true" : "false");
+
+      if(strcmp(param_name, "Power") == 0) {
+        Serial.printf("Received value = %s for %s - %s\n", val.val.b? "true" : "false", device_name, param_name);
+        switch_state_ch4 = val.val.b;
+        (switch_state_ch4 == false) ? digitalWrite(gpio_relay4, HIGH) : digitalWrite(gpio_relay4, LOW);
+        param->updateAndReport(val);
+      }
+      }
+      if(strcmp(device_name, "Switch_ch5") == 0) {
+      
+      Serial.printf("Lightbulb = %s\n", val.val.b? "true" : "false");
+      
+      if(strcmp(param_name, "Power") == 0) {
+          Serial.printf("Received value = %s for %s - %s\n", val.val.b? "true" : "false", device_name, param_name);
+        switch_state_ch5 = val.val.b;
+        (switch_state_ch5 == false) ? digitalWrite(gpio_relay5, HIGH) : digitalWrite(gpio_relay5, LOW);
+        param->updateAndReport(val);
+      }  
+      } 
+      else if(strcmp(device_name, "Switch_ch6") == 0) {
+      
+      Serial.printf("Switch value = %s\n", val.val.b? "true" : "false");
+
+      if(strcmp(param_name, "Power") == 0) {
+        Serial.printf("Received value = %s for %s - %s\n", val.val.b? "true" : "false", device_name, param_name);
+        switch_state_ch6 = val.val.b;
+        (switch_state_ch6 == false) ? digitalWrite(gpio_relay6, HIGH) : digitalWrite(gpio_relay6, LOW);
+        param->updateAndReport(val);
+      }
+      }
+      if(strcmp(device_name, "Switch_ch7") == 0) {
+      
+      Serial.printf("Lightbulb = %s\n", val.val.b? "true" : "false");
+      
+      if(strcmp(param_name, "Power") == 0) {
+          Serial.printf("Received value = %s for %s - %s\n", val.val.b? "true" : "false", device_name, param_name);
+        switch_state_ch7 = val.val.b;
+        (switch_state_ch7 == false) ? digitalWrite(gpio_relay7, HIGH) : digitalWrite(gpio_relay7, LOW);
+        param->updateAndReport(val);
+      } 
+      } 
+      else if(strcmp(device_name, "Switch_ch8") == 0) {
+      
+      Serial.printf("Switch value = %s\n", val.val.b? "true" : "false");
+
+      if(strcmp(param_name, "Power") == 0) {
+        Serial.printf("Received value = %s for %s - %s\n", val.val.b? "true" : "false", device_name, param_name);
+        switch_state_ch8 = val.val.b;
+        (switch_state_ch8 == false) ? digitalWrite(gpio_relay8, HIGH) : digitalWrite(gpio_relay8, LOW);
+        param->updateAndReport(val);
+      }
+      }
+   }
+
+void readSensor(){
+  
+  float h = dht.readHumidity();
+  float t = dht.readTemperature(); // or dht.readTemperature(true) for Fahrenheit
+  
+  if (isnan(h) || isnan(t)) 
+  {
+    Serial.println("Falha ao ler o sensor de temperatura!");
+    return;
+  }
+  else {
+    humidity1 = h;
+    temperature1 = t;
+    
+    lcd.setCursor(8, 0);
+    lcd.println("  TEMP: ");
+    lcd.setCursor(15, 0);
+    lcd.println(t,1);
+    lcd.setCursor(19, 0);
+    lcd.write((byte)0);
+    lcdprint(); 
+  } 
+}
+
+void sendSensor()
+{
+  readSensor();
+  temperature.updateAndReportParam("Temperature", temperature1);
+  humidity.updateAndReportParam("Temperature", humidity1);
+}
+
+void ARDUINO_ISR_ATTR isr(void* arg) {
+    LightSwitch* s = static_cast<LightSwitch*>(arg);
+    s->pressed = true;
+}
+
+//Array simbolo grau
+byte grau[8] ={ B00001100,
+                B00010010,
+                B00010010,
+                B00001100,
+                B00000000,
+                B00000000,
+                B00000000,
+                B00000000,};
+
+void setup()
+{
+    uint32_t chipId = 0;
+    
+    Serial.begin(115200);
+    dht.begin();
+    lcd.begin(); 
+    lcd.createChar(0, grau);
+
+    // Configure the input GPIOs
+    pinMode(gpio_reset, INPUT);
+    
+    pinMode(switch_ch1.pin, INPUT_PULLUP);
+    attachInterruptArg(switch_ch1.pin, isr, &switch_ch1, CHANGE);
+    pinMode(switch_ch2.pin, INPUT_PULLUP);
+    attachInterruptArg(switch_ch2.pin, isr, &switch_ch2, CHANGE);
+    pinMode(switch_ch3.pin, INPUT_PULLUP);
+    attachInterruptArg(switch_ch3.pin, isr, &switch_ch3, CHANGE);
+    pinMode(switch_ch4.pin, INPUT_PULLUP);
+    attachInterruptArg(switch_ch4.pin, isr, &switch_ch4, CHANGE);
+    pinMode(switch_ch5.pin, INPUT_PULLUP);
+    attachInterruptArg(switch_ch5.pin, isr, &switch_ch5, CHANGE);
+    pinMode(switch_ch6.pin, INPUT_PULLUP);
+    attachInterruptArg(switch_ch6.pin, isr, &switch_ch6, CHANGE);
+    pinMode(switch_ch7.pin, INPUT_PULLUP);
+    attachInterruptArg(switch_ch7.pin, isr, &switch_ch7, CHANGE);
+    pinMode(switch_ch8.pin, INPUT_PULLUP);
+    attachInterruptArg(switch_ch8.pin, isr, &switch_ch8, CHANGE);
+    
+    // Set the Relays GPIOs as output mode
+    pinMode(gpio_relay1, OUTPUT);
+    pinMode(gpio_relay2, OUTPUT);
+    pinMode(gpio_relay3, OUTPUT);
+    pinMode(gpio_relay4, OUTPUT);
+    pinMode(gpio_relay5, OUTPUT);
+    pinMode(gpio_relay6, OUTPUT);
+    pinMode(gpio_relay7, OUTPUT);
+    pinMode(gpio_relay8, OUTPUT);
+    pinMode(gpio_led, OUTPUT);
+    
+    // Write to the GPIOs the default state on booting
+    digitalWrite(gpio_relay1, DEFAULT_POWER_MODE);
+    digitalWrite(gpio_relay2, DEFAULT_POWER_MODE);
+    digitalWrite(gpio_relay3, DEFAULT_POWER_MODE);
+    digitalWrite(gpio_relay4, DEFAULT_POWER_MODE);
+    digitalWrite(gpio_relay5, DEFAULT_POWER_MODE);
+    digitalWrite(gpio_relay6, DEFAULT_POWER_MODE);
+    digitalWrite(gpio_relay7, DEFAULT_POWER_MODE);
+    digitalWrite(gpio_relay8, DEFAULT_POWER_MODE);
+    digitalWrite(gpio_led, false);
+
+    Node my_node;    
+    my_node = RMaker.initNode(nodeName);
+
+    //Standard switch device
+    my_switch1.addCb(write_callback);
+    my_switch2.addCb(write_callback);
+    my_switch3.addCb(write_callback);
+    my_switch4.addCb(write_callback);
+    my_switch5.addCb(write_callback);
+    my_switch6.addCb(write_callback);
+    my_switch7.addCb(write_callback);
+    my_switch8.addCb(write_callback);
+
+    //Add switch device to the node   
+    my_node.addDevice(my_switch1);
+    my_node.addDevice(my_switch2);
+    my_node.addDevice(my_switch3);
+    my_node.addDevice(my_switch4);
+    my_node.addDevice(my_switch5);
+    my_node.addDevice(my_switch6);
+    my_node.addDevice(my_switch7);
+    my_node.addDevice(my_switch8);
+    my_node.addDevice(temperature);
+    my_node.addDevice(humidity);
+
+    //This is optional 
+    RMaker.enableOTA(OTA_USING_PARAMS);
+    RMaker.enableTZService();
+    RMaker.enableSchedule();
+
+    //Service Name
+    for(int i=0; i<17; i=i+8) {
+      chipId |= ((ESP.getEfuseMac() >> (40 - i)) & 0xff) << i;
+    }
+
+    Serial.printf("\nChip ID:  %d Service Name: %s\n", chipId, service_name);
+
+    Serial.printf("\nStarting ESP-RainMaker\n");
+    RMaker.start();
+
+    WiFi.onEvent(sysProvEvent);
+#if CONFIG_IDF_TARGET_ESP32
+    WiFiProv.beginProvision(WIFI_PROV_SCHEME_BLE, WIFI_PROV_SCHEME_HANDLER_FREE_BTDM, WIFI_PROV_SECURITY_1, pop, service_name);
+#else
+    WiFiProv.beginProvision(WIFI_PROV_SCHEME_SOFTAP, WIFI_PROV_SCHEME_HANDLER_NONE, WIFI_PROV_SECURITY_1, pop, service_name);
+#endif
+    my_switch1.updateAndReportParam(ESP_RMAKER_DEF_POWER_NAME, false);
+    my_switch2.updateAndReportParam(ESP_RMAKER_DEF_POWER_NAME, false);
+    my_switch3.updateAndReportParam(ESP_RMAKER_DEF_POWER_NAME, false);
+    my_switch4.updateAndReportParam(ESP_RMAKER_DEF_POWER_NAME, false);
+    my_switch5.updateAndReportParam(ESP_RMAKER_DEF_POWER_NAME, false);
+    my_switch6.updateAndReportParam(ESP_RMAKER_DEF_POWER_NAME, false);
+    my_switch7.updateAndReportParam(ESP_RMAKER_DEF_POWER_NAME, false);
+    my_switch8.updateAndReportParam(ESP_RMAKER_DEF_POWER_NAME, false);
+}
+
+void logo()
+{
+    lcd.setCursor(0, 1);  
+    lcd.print("  ESTADO DOS RELES");
+    lcdprint();     
+}
+
+void lcdprint()
+{
+//Leitura e exibicao dos reles no LCD
+    if (digitalRead(gpio_relay1) == HIGH) {
+    lcd.setCursor(0, 2);  
+    lcd.printf("1off");
+  }
+    if (digitalRead(gpio_relay1) == LOW) { 
+    lcd.setCursor(0, 2);  
+    lcd.printf("1on ");
+  } 
+    if (digitalRead(gpio_relay2) == HIGH) {
+    lcd.setCursor(0, 3);  
+    lcd.printf("2off");
+  }
+    if (digitalRead(gpio_relay2) == LOW) {   
+    lcd.setCursor(0, 3);  
+    lcd.printf("2on ");
+  }  
+    if (digitalRead(gpio_relay3) == HIGH) {
+    lcd.setCursor(5, 2);  
+    lcd.printf("3off");
+  }
+    if (digitalRead(gpio_relay3) == LOW) {
+    lcd.setCursor(5, 2);  
+    lcd.printf("3on ");
+  }  
+    if (digitalRead(gpio_relay4) == HIGH) {       
+    lcd.setCursor(5, 3);  
+    lcd.printf("4off");
+  }
+    if (digitalRead(gpio_relay4) == LOW) {
+ 
+    lcd.setCursor(5, 3);  
+    lcd.printf("4on ");
+  }
+    if (digitalRead(gpio_relay5) == HIGH) {
+    lcd.setCursor(11, 2);  
+    lcd.printf("5off");
+  }
+    if (digitalRead(gpio_relay5) == LOW) {
+    lcd.setCursor(11, 2);  
+    lcd.printf("5on ");
+  }    
+    if (digitalRead(gpio_relay6) == HIGH) {
+    lcd.setCursor(11, 3);  
+    lcd.printf("6off");
+  }
+    if (digitalRead(gpio_relay6) == LOW) {
+    lcd.setCursor(11, 3);  
+    lcd.printf("6on ");
+  }
+    if (digitalRead(gpio_relay7) == HIGH) {
+   
+    lcd.setCursor(16, 2);  
+    lcd.printf("7off");
+  }
+    if (digitalRead(gpio_relay7) == LOW) {
+
+    lcd.setCursor(16, 2);  
+    lcd.printf("7on ");
+  }     
+    if (digitalRead(gpio_relay8) == HIGH) {
+
+    lcd.setCursor(16, 3);  
+    lcd.printf("8off");
+  }
+    if (digitalRead(gpio_relay8) == LOW) {
+    lcd.setCursor(16, 3);  
+    lcd.printf("8on ");
+  }
+
+}
+
+
+void reconect()
+{
+      unsigned long currentMillis = millis();
+  if ((WiFi.status() != WL_CONNECTED) && (currentMillis - previousMillis >=interval)) {
+    Serial.print(millis());
+    Serial.println("RECONECTANDO WIFI...");
+    WiFi.disconnect();
+    WiFi.reconnect();
+    previousMillis = currentMillis;
+  }
+  
+}
+
+void reset()
+{
+    if(digitalRead(gpio_reset) == LOW) { //Push button pressed
+         lcd.clear();
+         lcd.setCursor(1, 1); 
+         lcd.printf("Reset pressionado");
+         delay(1000);
+         lcd.clear();
+        int startTime = millis();
+        while(digitalRead(gpio_reset) == LOW) delay(50);
+        int endTime = millis();
+
+        if ((endTime - startTime) > 10000) {
+          // If key pressed for more than 10secs, reset all
+          Serial.printf("Reset to factory.\n");
+          RMakerFactoryReset(2);
+        } else if ((endTime - startTime) > 3000) {
+           lcd.clear();
+           lcd.setCursor(2, 1); 
+           lcd.printf("Resetando Wi-Fi");
+           delay(1000);
+           lcd.clear();
+          // If key pressed for more than 3secs, but less than 10, reset Wi-Fi
+          RMakerWiFiReset(2);
+        }
+    }
+  
+}
+
+void wifi()
+{
+  if (WiFi.status() != WL_CONNECTED)
+    {
+      lcd.setCursor(0, 0);  
+      lcd.print("WIFI:OFF");  
+      lcdprint(); 
+      digitalWrite(gpio_led, false);   
+    }
+    else
+    {
+      lcd.setCursor(0, 0);  
+      lcd.print("WIFI:ON  ");  
+      lcdprint(); 
+      digitalWrite(gpio_led, true);
+    }
+}
+
+void manual_control()
+{
+    if (switch_ch1.pressed) {
+        switch_ch1.pressed = false;
+        switch_state_ch1 = !switch_state_ch1;   
+        my_switch1.updateAndReportParam(ESP_RMAKER_DEF_POWER_NAME, switch_state_ch1);
+        (switch_state_ch1 == false) ? digitalWrite(gpio_relay1, HIGH) : digitalWrite(gpio_relay1, LOW);        
+    } 
+        if (switch_ch2.pressed) {
+        switch_ch2.pressed = false;
+        switch_state_ch2 = !switch_state_ch2;
+        my_switch2.updateAndReportParam(ESP_RMAKER_DEF_POWER_NAME, switch_state_ch2);
+        (switch_state_ch2 == false) ? digitalWrite(gpio_relay2, HIGH) : digitalWrite(gpio_relay2, LOW);
+    }
+        if (switch_ch3.pressed) {
+        switch_ch3.pressed = false;
+        switch_state_ch3 = !switch_state_ch3;
+        my_switch3.updateAndReportParam(ESP_RMAKER_DEF_POWER_NAME, switch_state_ch3);
+        (switch_state_ch3 == false) ? digitalWrite(gpio_relay3, HIGH) : digitalWrite(gpio_relay3, LOW);
+        
+    }  if (switch_ch4.pressed) {
+        switch_ch4.pressed = false;
+        switch_state_ch4 = !switch_state_ch4;
+        my_switch4.updateAndReportParam(ESP_RMAKER_DEF_POWER_NAME, switch_state_ch4);
+        (switch_state_ch4 == false) ? digitalWrite(gpio_relay4, HIGH ) : digitalWrite(gpio_relay4, LOW);
+    }
+        if (switch_ch5.pressed) {
+        switch_ch5.pressed = false;
+        switch_state_ch5 = !switch_state_ch5;
+        my_switch5.updateAndReportParam(ESP_RMAKER_DEF_POWER_NAME, switch_state_ch5);
+        (switch_state_ch5 == false) ? digitalWrite(gpio_relay5, HIGH) : digitalWrite(gpio_relay5, LOW);
+        
+    }
+        if (switch_ch6.pressed) {
+        switch_ch6.pressed = false;
+        switch_state_ch6 = !switch_state_ch6;
+        my_switch6.updateAndReportParam(ESP_RMAKER_DEF_POWER_NAME, switch_state_ch6);
+        (switch_state_ch6 == false) ? digitalWrite(gpio_relay6, HIGH) : digitalWrite(gpio_relay6, LOW);
+    }
+        if (switch_ch7.pressed) {
+        switch_ch7.pressed = false;
+        switch_state_ch7 = !switch_state_ch7;
+        my_switch7.updateAndReportParam(ESP_RMAKER_DEF_POWER_NAME, switch_state_ch7);
+        (switch_state_ch7 == false) ? digitalWrite(gpio_relay7, HIGH) : digitalWrite(gpio_relay7, LOW);
+        
+    }   if (switch_ch8.pressed) {
+        switch_ch8.pressed = false;
+        switch_state_ch8 = !switch_state_ch8;
+        my_switch8.updateAndReportParam(ESP_RMAKER_DEF_POWER_NAME, switch_state_ch8);
+        (switch_state_ch8 == false) ? digitalWrite(gpio_relay8, HIGH) : digitalWrite(gpio_relay8, LOW);
+    }
+}
+
+void loop()
+{
+
+    
+    delay(100);
+    manual_control();
+    logo(); 
+    wifi(); 
+    readSensor();
+    sendSensor();  
+    reset();
+    reconect();
+    lcdprint();    
+}
